@@ -19,6 +19,19 @@ public class Node {
         tables.add(l);
     }
 
+    public void setParents(List<Node> parents) {
+        this.parents = parents;
+    }
+
+    public void setChildren(List<Node> children) {
+        this.children = children;
+    }
+
+    public void clearTables() {
+        tables.clear();
+
+    }
+
     // Getters
     public List<Node> getParents() {
         return parents;
@@ -99,44 +112,7 @@ public class Node {
             }
         }
     }
-//    public void printNodeDetails() {
-//        System.out.println("Node: " + nodeName);
-//
-//        // הדפסת הורים
-//        System.out.print("Parents: ");
-//        for (Node p : parents) {
-//            System.out.print(p.getName() + " ");
-//        }
-//        System.out.println();
-//
-//        // הדפסת ילדים
-//        System.out.print("Children: ");
-//        for (Node c : children) {
-//            System.out.print(c.getName() + " ");
-//        }
-//        System.out.println();
-//
-//        // הדפסת outcomes
-//        System.out.print("Outcomes: ");
-//        for (String o : outcome) {
-//            System.out.print(o + " ");
-//        }
-//        System.out.println();
-//
-//        // הדפסת הטבלאות
-//        System.out.println("Tables:");
-//        if (tables == null || tables.isEmpty()) {
-//            System.out.println("No tables.");
-//            return;
-//        }
-//
-//        for (int i = 0; i < tables.size(); i++) {
-//            System.out.println("Table " + (i + 1) + ":");
-//            List<rowCal> table = tables.get(i);
-//
-//            for (rowCal row : table) {
-//                System.out.println(row); // מניח של-rowCal יש toString()
-//            }
-//        }
-//    }
+
+
+
 }

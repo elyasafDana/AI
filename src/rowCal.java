@@ -31,4 +31,12 @@ class rowCal {
     public List<Node> getGiven() {
         return given;
     }
+
+    public double getProb() {
+        return prob;
+    }
+
+    public void setValues(String[] values) {
+        this.values = values;
+    }
 }

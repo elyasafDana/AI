@@ -2,32 +2,153 @@
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
-import java.io.IOException;
-import java.sql.ClientInfoStatus;
 import java.util.*;
 
 public class ex {
+    static int multCount = 0;
+    static int addCount = 0;
 
      static Map<String, Node> allNodes = new HashMap<>();
 
     public static void main(String[] args) throws ParserConfigurationException {
-        extractFromXML("src/alarm_net.xml");
-        printNetwork();
-        System.out.println(solveBayesBall("B-E|"));
-        System.out.println(solveBayesBall("B-E|J"));
-        for (Node node : allNodes.values()) {
-            node.printNodeDetails();
+        try {
+            Scanner scanner = new Scanner(new File("input.txt")); // קריאה מהספרייה הנוכחית [cite: 103]
+
+            if (scanner.hasNextLine()) {
+                String xmlFileName = scanner.nextLine().trim();
+                allNodes.clear(); // ליתר ביטחון
+                extractFromXML(xmlFileName); // טעינה חד-פעמית של הרשת
+            }
+
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine().trim();
+                if (line.isEmpty()) continue;
+
+                // איפוס מונים לכל שאילתה [cite: 86]
+                multCount = 0;
+                addCount = 0;
+
+                if (line.equals("reverse")) {
+                    solveReverse(); // ללא שינוי הרשת המקורית [cite: 61]
+                } else if (line.startsWith("P(")) {
+                    System.out.println(solveQuery(line));
+                } else {
+                    System.out.println(solveBayesBall(line) ? "yes" : "no");
+                }
+            }
+            scanner.close();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        solveQuery("P(J=T|B=T) A-E-M");
+
+//        extractFromXML("alarm_net.xml");
+//        printNetwork();
+//        System.out.println(solveBayesBall("B-E|"));
+//        System.out.println(solveBayesBall("B-E|J"));
+//        for (Node node : allNodes.values()) {
+//            node.printNodeDetails();
+//        }
+//        solveQuery("P(J=T|B=T) A-E-M");
 
 
     }
+
+    private static void solveReverse() {
+        List<rowCal> allJoinedTables = new ArrayList<>();
+        List<List<rowCal>> allTables = new ArrayList<>();
+        for (Node n : allNodes.values()) {
+            allTables.addAll(n.getTables());
+        }
+
+        // איחוד כל הטבלאות לקבלת ה-Joint Distribution המלאה
+        allJoinedTables = allTables.get(0);
+        for (int i = 1; i < allTables.size(); i++) {
+            allJoinedTables = joinTwoTables(allJoinedTables, allTables.get(i), false);
+        }
+//        System.out.println("JOINED TABLE:");
+//        printTable(allJoinedTables);
+
+
+        for (Node node : allNodes.values()) {
+            flipNode(node,allJoinedTables);
+        }
+        System.out.println("this is the revers");
+         printNetwork();
+
+    }
+
+    private static void flipNode(Node node, List<rowCal> allJoinedTables) {
+        List<List<rowCal>> allTables = new ArrayList<>();
+        for (Node n : allNodes.values()) {
+            allTables.addAll(n.getTables());
+        }
+
+        // איחוד כל הטבלאות לקבלת ה-Joint Distribution המלאה
+        allJoinedTables = allTables.get(0);
+        for (int i = 1; i < allTables.size(); i++) {
+            allJoinedTables = joinTwoTables(allJoinedTables, allTables.get(i), false);
+        }
+        System.out.println("JOINED TABLE:");
+        printTable(allJoinedTables);
+        List<Node> newParents = new ArrayList<>(node.getChildren());
+        List<Node> newChildren = new ArrayList<>(node.getParents());
+        List<rowCal> newAllJoinedTables=new ArrayList<>(allJoinedTables);
+
+        node.setParents(newParents);
+        node.setChildren(newChildren);
+
+         List<rowCal> cpt= caculateCPT( newParents, node,newAllJoinedTables);
+
+         node.clearTables();
+         node.addTable(cpt);
+
+
+    }
+
+
+    private static  List<rowCal> caculateCPT(List<Node> parents, Node currentNode,List<rowCal> allJoinedTables) {
+
+        List<rowCal> allJoinedTablesTEMP=new ArrayList<>(allJoinedTables);
+        List<Node> otherNodes=new ArrayList<>();
+        for (Node node : allNodes.values()) {
+            if (!parents.contains(node)&& !node.getName().equals(currentNode.getName())) otherNodes.add(node);
+        }
+        System.out.println("this is the other nodes:");
+        for (Node n :otherNodes) System.out.println(n.getName()+ ",");
+
+        for (Node nodeToEliminate:otherNodes){
+            allJoinedTablesTEMP=eliminate(allJoinedTablesTEMP,nodeToEliminate.getName());
+        }
+        List<rowCal> allJoinedTablesWITHOUTCURRENTNODE=new ArrayList<>(allJoinedTablesTEMP);
+        allJoinedTablesWITHOUTCURRENTNODE=eliminate(allJoinedTablesTEMP,currentNode.getName());
+
+        List<rowCal> cptTable=new ArrayList<>();
+        double cptProb=0;
+        for (rowCal noMode : allJoinedTablesWITHOUTCURRENTNODE) {
+            for (rowCal withNode : allJoinedTablesTEMP) {
+                if (isCompatible(noMode, withNode)) {
+                    if (noMode.getProb()==0){
+                        cptProb=0;
+                    }else {
+                        cptProb=withNode.getProb() / noMode.getProb();
+                    }
+                    cptTable.add(new rowCal(withNode.getValues(), cptProb, withNode.getGiven()));
+                }
+            }
+        }
+        System.out.println("this is the new cpt for node:"+ currentNode.getName());
+        printTable(cptTable);
+
+        return cptTable;
+
+    }
+
+
     public static void printNetwork() {
         System.out.println("--- Bayesian Network Structure ---");
         System.out.println(allNodes.size());
@@ -55,30 +176,16 @@ public class ex {
 
             // הדפסת ערכים אפשריים (Outcomes)
             // System.out.println("  Outcomes: " + node.getOutcomes());
+            System.out.println("CPT:");
+            for (List<rowCal> t:node.tables){
+                //printTable(t);
+            }
+
+
+
 
             System.out.println("----------------------------------");
         }
-    }
-
-    public List<rowCal> buildTableFromXML(String xmlContent, List<String> parentNames, String myName) {
-        String[] probs = xmlContent.trim().split("\\s+");
-        List<String> allVars = new ArrayList<>(parentNames);
-        allVars.add(myName); // סדר המשתנים: הורים ואז הילד
-
-        int numVars = allVars.size();
-        List<rowCal> table = new ArrayList<>();
-
-        for (int i = 0; i < probs.length; i++) {
-            String[] config = new String[numVars];
-            int temp = i;
-            // המרה של אינדקס i לקומבינציית T/F (מונה בינארי)
-            for (int j = numVars - 1; j >= 0; j--) {
-                config[j] = (temp % 2 == 0) ? "T" : "F";
-                temp /= 2;
-            }
-           // table.add(new Row(config, Double.parseDouble(probs[i])));
-        }
-        return table;
     }
 
 
@@ -113,20 +220,252 @@ public class ex {
         List<Node> releventNode = new ArrayList<>(allNodes.values());
         releventNode=getRelevantNodes(queryVar,evidence);
         releventNode=getActiveNodes(queryVar,evidence,releventNode);
-        System.out.println("THIS IS THE RELEVENT NODES AFTER ALL ");
-        for (Node n:releventNode){
-            n.printNodeDetails();
+//        System.out.println("THIS IS THE RELEVENT NODES AFTER ALL ");
+//        for (Node n:releventNode){
+//            n.printNodeDetails();
+//        }
+        for (int i=0;i< allNodes.size();i++) {
+            allNodes.get(i);
         }
 
 
         //עד פה זה ההורדת NODE עכשיו מתחילים להתעסק עם הטבלאות שלהם
-        List<List<rowCal>> allTables=new ArrayList<>();
-        for (Node node : allNodes.values()) {
-            allTables.addAll(node.getTables());
+        List<List<rowCal>> allTablesOfReleventNodes=new ArrayList<>();
+        for (Node node : releventNode) {
+            allTablesOfReleventNodes.addAll(node.getTables());
         }
+        List<rowCal> finalTable=new ArrayList<>();
+        List<List<rowCal>> MinimizeTables = new ArrayList<>();
+        for (List<rowCal> table: allTablesOfReleventNodes){
+            List<rowCal> filteredTable = filterByEvidence(table, evidence);
+            MinimizeTables.add(filteredTable);
+        }
+        List<List<rowCal>> hidenTables=new ArrayList<>();
+        for (String hiddenVar : hiddenOrder) {
+
+            // כל הטבלאות שמכילות את המשתנה
+            List<List<rowCal>> relevantTables =
+                    getReleventTables(MinimizeTables, hiddenVar);
+
+            if (relevantTables.isEmpty()) {
+                continue;
+            }
+
+            // JOIN לכל הטבלאות
+            List<rowCal> joined = relevantTables.get(0);
+
+            for (int i = 1; i < relevantTables.size(); i++) {
+                joined = joinTwoTables(joined, relevantTables.get(i),true);
+            }
+
+            // ELIMINATE
+            List<rowCal> eliminated = eliminate(joined, hiddenVar);
+
+            // מוחקים את כל הטבלאות הישנות
+            MinimizeTables.removeAll(relevantTables);
+
+            // מוסיפים את הטבלה החדשה
+            MinimizeTables.add(eliminated);
+
+        }
+        if (MinimizeTables.isEmpty()) return "0.00000";
+
+        finalTable = MinimizeTables.get(0);
+        for (int i = 1; i < MinimizeTables.size(); i++) {
+            finalTable = joinTwoTables(finalTable, MinimizeTables.get(i),false);
+        }
+
+//        System.out.println("-------this is the tables after all the hidden and eliminate-----------");
+//        printTable(finalTable);
+
+
+        // 1. נרמול - הופך את 0.00085 ל-0.85
+        double sum = 0;
+        for (rowCal r : finalTable){
+            sum += r.prob;
+            addCount++;
+        }
+        for (rowCal r : finalTable) r.prob /= sum;
+
+//        System.out.println("------- Final Normalized Table -------");
+//        printTable(finalTable);
+        System.out.println("Multiply operations: " + multCount);
+        System.out.println("Add operations: " + addCount);
+
+        // 2. שליפת התוצאה עבור J=T
+        // כאן תכתוב לוגיקה שסורקת את finalTable ומחזירה את ה-prob של J=T
+
         return "";
     }
-    public static List<rowCal> filterByEvidence(List<rowCal> table, Map<Node, String> evidence) {
+
+
+    public static List<List<rowCal>> getReleventTables(List<List<rowCal>> allTables,String hiddenName){
+        List<List<rowCal>> curentTable =new ArrayList<>();
+        for (int i=0;i<allTables.size();i++){
+
+            if (allTables.get(i).get(0).getGiven().contains(allNodes.get(hiddenName))){
+                curentTable.add(allTables.get(i));
+            }
+        }
+        return curentTable;
+
+    }
+
+    public static void printTable(List<rowCal> table) {
+        if (table == null || table.isEmpty()) {
+            System.out.println("The table is empty.");
+            return;
+        }
+
+        // 1. הדפסת שורת הכותרת (שמות הקודקודים)
+        List<Node> nodes = table.get(0).getGiven();
+        for (Node node : nodes) {
+            System.out.print(node.getName() + "\t");
+        }
+        System.out.println("| Prob");
+
+        System.out.println("------------------------------------");
+
+        // 2. מעבר על כל שורה והדפסת הערכים וההסתברות
+        for (rowCal row : table) {
+            String[] values = row.getValues();
+            for (String val : values) {
+                System.out.print(val + "\t");
+            }
+            // הדפסת ההסתברות עם פורמט של 5 ספרות אחרי הנקודה (נוח לדיבאג)
+            System.out.printf("| %.5f\n", row.prob);
+        }
+        System.out.println();
+    }
+
+
+
+private static boolean isCompatible(rowCal r1, rowCal r2) {
+    // עוברים על רשימת הקודקודים של שורה 1
+    for (int i = 0; i < r1.getGiven().size(); i++) {
+        Node n1 = r1.getGiven().get(i);
+
+        // מחפשים קודקוד עם אותו שם בשורה 2
+        for (int j = 0; j < r2.getGiven().size(); j++) {
+            Node n2 = r2.getGiven().get(j);
+
+            // אם השמות זהים - זה אותו משתנה! בודקים אם הערכים שלו זהים
+            if (n1.getName().equals(n2.getName())) {
+                if (!r1.getValues()[i].equals(r2.getValues()[j])) {
+                    return false; // סתירה בערכים (T מול F)
+                }
+            }
+        }
+    }
+    return true;
+}
+    public static List<rowCal> eliminate(List<rowCal> table, String varName) {
+        if (table == null || table.isEmpty()) return table;
+
+        // 1. מציאת האינדקס של המשתנה שאנחנו רוצים להעלים בתוך ה-given
+        int indexToRemove = -1;
+        List<Node> Given = table.get(0).getGiven();
+        //List<Node> newGiven = new ArrayList<>();
+
+        for (int i = 0; i < Given.size(); i++) {
+            if (Given.get(i).getName().equals(varName)) {
+                indexToRemove = i;
+            }
+        }
+
+        // אם המשתנה בכלל לא בטבלה, אין מה להעלים
+        if (indexToRemove == -1) return table;
+
+        //for (int i=0;i<table.size();i++){
+            rowCal rc=table.get(0);
+            rc.getGiven().remove(indexToRemove);
+            int count=0;
+        for (int i=0;i<table.size();i++){
+            rc=table.get(i);
+            String[] arr=new String[rc.getValues().length-1];
+            for (int j=0;j<= arr.length;j++){
+                if (j==indexToRemove) continue;
+                else {
+                    arr[count]=rc.getValues()[j];
+                    count++;
+                }
+            }
+            table.get(i).setValues(arr);
+            count=0;
+        }
+        table.size();
+        Map<String, Double> tempMap=new HashMap<>();
+        for (int i=0;i<table.size();i++){
+            rowCal r=table.get(i);
+            String key=String.join(" ", r.getValues());
+            if (tempMap.containsKey(key)){
+                double value=tempMap.get(key);
+                tempMap.put(key,value+table.get(i).getProb());
+                addCount++;
+            }else {
+                tempMap.put(String.join(" ", r.getValues()),r.getProb());
+            }
+
+        }
+        List<rowCal> finalTable = new ArrayList<>();
+        for (Map.Entry<String, Double> entry : tempMap.entrySet()) {
+            // הופכים את המפתח (הסטרינג) חזרה למערך של ערכים
+            String[] values = entry.getKey().split(" ");
+            double prob = entry.getValue();
+
+            // מוסיפים לטבלה הסופית עם ה-given המעודכן
+            finalTable.add(new rowCal(values, prob, table.get(0).getGiven()));
+        }
+        return finalTable;
+    }
+
+    public static List<rowCal> joinTwoTables(List<rowCal> table1, List<rowCal> table2,boolean b) {
+//        System.out.println("we going to do join to");
+//        System.out.println("table1:");
+//        printTable(table1);
+//        System.out.println("table2:");
+//        printTable(table2);
+
+        List<rowCal> result = new ArrayList<>();
+        if (table1.isEmpty() || table2.isEmpty()) return result;
+
+        // א. יצירת רשימת ה-Nodes של הטבלה החדשה (איחוד בלי כפילויות)
+        List<Node> newGiven = new ArrayList<>(table1.get(0).getGiven());
+        for (Node n : table2.get(0).getGiven()) {
+            boolean exists = false;
+            for (Node existing : newGiven) {
+                if (existing.getName().equals(n.getName())) { exists = true; break; }
+            }
+            if (!exists) newGiven.add(n);
+        }
+
+        // ב. לולאה כפולה על השורות
+        for (rowCal r1 : table1) {
+            for (rowCal r2 : table2) {
+                if (isCompatible(r1, r2)) {
+
+                    String[] newVals = new String[newGiven.size()];
+                    // מילוי ערכים לשורה החדשה לפי הסדר של newGiven
+                    for (int i=0;i< newGiven.size();i++){
+                      int index=  r2.getGiven().indexOf(newGiven.get(i));
+                      if (index<0){
+                          index=r1.getGiven().indexOf(newGiven.get(i));
+                          newVals[i]=r1.getValues()[index];
+                      }else{
+                          newVals[i]=r2.getValues()[index];
+                      }
+                    }
+
+                    result.add(new rowCal(newVals, r1.prob * r2.prob, newGiven));
+                    if (b)multCount++;
+                }
+            }
+        }
+//        System.out.println("this is the result");
+//        printTable(result);
+        return result;
+    }
+    public static List<rowCal> filterByEvidence(List<rowCal> table, Map<String, String> evidence) {
         List<rowCal> tempTable = new ArrayList<>();
 
         for (int i = 0; i < table.size(); i++) {
@@ -139,8 +478,8 @@ public class ex {
 
             for (int j = 0; j < given.size(); j++) {
                 Node node = given.get(j);
-                if (evidence.containsKey(node)) {
-                    if (!evidence.get(node).equals(values[j])) {
+                if (evidence.containsKey(node.getName())) {
+                    if (!evidence.get(node.getName()).equals(values[j])) {
                         valid = false;
                         break;
                     }
@@ -155,22 +494,6 @@ public class ex {
 
 
 
-
-
-
-    public static List<Node> findCommon(List<Node> l1, List<Node> l2){
-
-        List<Node> common = new ArrayList<>();
-
-        for(Node n1 : l1){
-
-            if(l2.contains(n1)){
-                common.add(n1);
-            }
-        }
-
-        return common;
-    }
 
     public static List<Node> getRelevantNodes(String queryName, Map<String, String> evidence) {
         Set<Node> relevant = new HashSet<>();
@@ -229,23 +552,7 @@ public class ex {
         }
         s = s.substring(0, s.length() - 1);
         return s;
-
-
-
-//        List<String> queryList=new ArrayList<>();
-//        for (Node n: releventWithAnserstors){
-//            String ev="";
-//            for (Map.Entry<String, String> entry : evidence.entrySet()) {
-//                ev=ev+entry.getKey() +",";
-//            }
-//            ev = ev.substring(0, ev.length() - 1);
-//           queryList.add(queryVar+"-"+n.getName()+"|"+ev);
-//        }
-//        return queryList;
     }
-
-
-
 
      public static void extractFromXML(String name) throws ParserConfigurationException {
          File file = new File(name);
@@ -325,16 +632,10 @@ public class ex {
                 outcomeName[col] = currentNode.getOutcome(tempLine % outcomeSize);
                 tempLine = tempLine / outcomeSize;
             }
-            myTable.add(new rowCal(outcomeName, probabilities[line],depends));
+            myTable.add(new rowCal(outcomeName, probabilities[line],new ArrayList<>(allParticipants)));
         }
         mainNode.addTable(myTable);
     }
-
-
-
-
-
-
 
     private static boolean solveBayesBall(String query) {
 
