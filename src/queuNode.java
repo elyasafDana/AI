@@ -1,7 +1,7 @@
 import java.util.Objects;
 
 public class queuNode {
-    private Node node;
+    public Node node;
     boolean fromParent;
     queuNode(Node n, boolean fromParent){
         node=n;

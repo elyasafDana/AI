@@ -12,11 +12,11 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.*;
 
-public class ex {
+public class Ex1 {
     static int multCount = 0;
     static int addCount = 0;
 
-     static Map<String, Node> allNodes = new HashMap<>();
+     static Map<String, Node> allNodes = new LinkedHashMap<>();
     //static Map<String, Node> allNodesCopy;
 
     public static void main(String[] args) throws ParserConfigurationException {
@@ -55,7 +55,7 @@ public class ex {
 
     }
     public static Map<String, Node> deepCopyNodes(Map<String, Node> original) {
-        Map<String, Node> copyMap = new HashMap<>();
+        Map<String, Node> copyMap = new LinkedHashMap<>();
 
         // 1. יצירת אובייקטים חדשים (בלי קשרים עדיין)
         for (Node n : original.values()) {
@@ -139,37 +139,84 @@ public class ex {
             System.err.println("Error writing to output.txt: " + e.getMessage());
         }
     }
-
     private static String solveReverse() {
-        Map<String, Node> allNodesCopy = deepCopyNodes(allNodes);
-        System.out.println("this is the copy one:");
-        printNodesMap(allNodesCopy);
+        Map<String, Node> originalCopy = deepCopyNodes(allNodes);
 
-        //Map<String, Node> allNodesCopy = new HashMap<>(allNodes);
-        List<rowCal> allJoinedTables = new ArrayList<>();
+        Map<String, Node> reversedCopy = deepCopyNodes(allNodes);
+
         List<List<rowCal>> allTables = new ArrayList<>();
-        for (Node n : allNodesCopy.values()) {
+
+        for (Node n : originalCopy.values()) {
             allTables.addAll(n.getTables());
         }
 
-        allJoinedTables = allTables.get(0);
+        List<rowCal> allJoinedTables = allTables.get(0);
+
         for (int i = 1; i < allTables.size(); i++) {
-            allJoinedTables = joinTwoTables(allJoinedTables, allTables.get(i), false);
+
+            allJoinedTables = joinTwoTables(allJoinedTables, allTables.get(i));
         }
 
+        for (Node reversedNode : reversedCopy.values()) {
 
+            Node originalNode = originalCopy.get(reversedNode.getName());
 
-        for (Node node : allNodesCopy.values()) {
-            flipNode(node,allJoinedTables,allNodesCopy);
+            List<Node> newParents = new ArrayList<>();
+
+            for (Node child : originalNode.getChildren()) {
+                newParents.add(reversedCopy.get(child.getName()));
+            }
+
+            List<Node> newChildren = new ArrayList<>();
+
+            for (Node parent : originalNode.getParents()) {
+
+                newChildren.add(reversedCopy.get(parent.getName()));
+            }
+
+            reversedNode.setParents(newParents);
+            reversedNode.setChildren(newChildren);
+
+            List<rowCal> cpt = caculateCPT(newParents, reversedNode, deepCopyTable(allJoinedTables), reversedCopy);
+
+            reversedNode.clearTables();
+
+            reversedNode.addTable(cpt);
         }
-        System.out.println("this is the regular");
-        System.out.println(networkToXML(allNodes));
-        System.out.println("this is the revers");
 
-        System.out.println(networkToXML(allNodesCopy));
-        return networkToXML(allNodesCopy);
-
+        return networkToXML(reversedCopy);
     }
+
+//    private static String solveReverse() {
+//        Map<String, Node> allNodesCopy = deepCopyNodes(allNodes);
+//        System.out.println("this is the copy one:");
+//        printNodesMap(allNodesCopy);
+//
+//        //Map<String, Node> allNodesCopy = new HashMap<>(allNodes);
+//        List<rowCal> allJoinedTables = new ArrayList<>();
+//        List<List<rowCal>> allTables = new ArrayList<>();
+//        for (Node n : allNodesCopy.values()) {
+//            allTables.addAll(n.getTables());
+//        }
+//
+//        allJoinedTables = allTables.get(0);
+//        for (int i = 1; i < allTables.size(); i++) {
+//            allJoinedTables = joinTwoTables(allJoinedTables, allTables.get(i), false);
+//        }
+//
+//
+//
+//        for (Node node : allNodesCopy.values()) {
+//            flipNode(node,allJoinedTables,allNodesCopy);
+//        }
+//        System.out.println("this is the regular");
+//        System.out.println(networkToXML(allNodes));
+//        System.out.println("this is the revers");
+//
+//        System.out.println(networkToXML(allNodesCopy));
+//        return networkToXML(allNodesCopy);
+//
+//    }
 
     public static String networkToXML(Map<String, Node> nodesMap) {
         StringBuilder xml = new StringBuilder();
@@ -216,6 +263,13 @@ public class ex {
         }
         return copy;
     }
+//    private static List<rowCal> deepCopyTable(List<rowCal> table) {
+//        List<rowCal> copy = new ArrayList<>();
+//        for (rowCal r : table) {
+//            copy.add(new rowCal(r.getValues().clone(), r.getProb(), new ArrayList<>(r.getGiven())));
+//        }
+//        return copy;
+//    }
 
     private static void flipNode(Node node, List<rowCal> allJoinedTables,Map<String, Node> allNodesCopy ) {
         List<List<rowCal>> allTables = new ArrayList<>();
@@ -225,7 +279,7 @@ public class ex {
 
         allJoinedTables = allTables.get(0);
         for (int i = 1; i < allTables.size(); i++) {
-            allJoinedTables = joinTwoTables(allJoinedTables, allTables.get(i), false);
+            allJoinedTables = joinTwoTables(allJoinedTables, allTables.get(i));
         }
         System.out.println("JOINED TABLE:");
         printTable(allJoinedTables);
@@ -313,96 +367,198 @@ private static List<rowCal> caculateCPT(List<Node> parents, Node currentNode, Li
             System.out.println("----------------------------------");
         }
     }
-
-
     public static String solveQuery(String query) {
 
-        String queryPart = query.substring(query.indexOf("(") + 1, query.indexOf(")")); // Q=q|E1=e1
-        String hiddenPart = query.contains(" ") ? query.substring(query.indexOf(" ") + 1) : ""; // H1-H2
+        String queryPart = query.substring(query.indexOf("(") + 1, query.indexOf(")"));
+        String hiddenPart = query.contains(" ") ? query.substring(query.indexOf(" ") + 1) : "";
 
         String[] splitQuery = queryPart.split("\\|");
         String queryVar = splitQuery[0].split("=")[0];
         String queryVal = splitQuery[0].split("=")[1];
 
-        Map<String, String> evidence = new HashMap<>();
+        Map<String, String> evidence = new LinkedHashMap<>();
+
         if (splitQuery.length > 1) {
             String[] evs = splitQuery[1].split(",");
-            for (int i=0;i<evs.length;i++){
+            for (int i = 0; i < evs.length; i++) {
                 String[] pair = evs[i].split("=");
                 evidence.put(pair[0].trim(), pair[1].trim());
-
             }
-
         }
 
-        String[] hiddenOrder = hiddenPart.isEmpty() ? new String[0] : hiddenPart.split("-");
-
-
-        List<Node> releventNode = new ArrayList<>(allNodes.values());
-        releventNode=getRelevantNodes(queryVar,evidence);
-        releventNode=getActiveNodes(queryVar,evidence,releventNode);
-
-        for (int i=0;i< allNodes.size();i++) {
-            allNodes.get(i);
+        String[] hiddenOrder;
+        if (hiddenPart.isEmpty()) {
+            hiddenOrder = new String[0];
         }
-
-
-        List<List<rowCal>> allTablesOfReleventNodes=new ArrayList<>();
+        else {
+            hiddenOrder = hiddenPart.split("-");
+        }
+        List<Node> releventNode = getRelevantNodes(queryVar, evidence);
+        releventNode = getActiveNodes(queryVar, evidence, releventNode);
+        List<List<rowCal>> allTablesOfReleventNodes = new ArrayList<>();
         for (Node node : releventNode) {
             allTablesOfReleventNodes.addAll(node.getTables());
         }
-        List<rowCal> finalTable=new ArrayList<>();
-        List<List<rowCal>> MinimizeTables = new ArrayList<>();
-        for (List<rowCal> table: allTablesOfReleventNodes){
+        List<List<rowCal>> minimizeTables = new ArrayList<>();
+        for (List<rowCal> table : allTablesOfReleventNodes) {
             List<rowCal> filteredTable = filterByEvidence(table, evidence);
-            MinimizeTables.add(filteredTable);
+            minimizeTables.add(filteredTable);
         }
-        List<List<rowCal>> hidenTables=new ArrayList<>();
         for (String hiddenVar : hiddenOrder) {
-
-            List<List<rowCal>> relevantTables =
-                    getReleventTables(MinimizeTables, hiddenVar);
-
-            if (relevantTables.isEmpty()) {
-                continue;
-            }
-
+            List<List<rowCal>> relevantTables = getReleventTables(minimizeTables, hiddenVar);
+            if (relevantTables.isEmpty()) continue;
+            relevantTables.sort((t1, t2) -> {
+                int size1 = t1.size();
+                int size2 = t2.size();
+                if (size1 != size2) {
+                    return Integer.compare(size1, size2);
+                }
+                int ascii1 = 0;
+                int ascii2 = 0;
+                for (Node n : t1.get(0).getGiven()) {
+                    ascii1 += n.getName().charAt(0);
+                }
+                for (Node n : t2.get(0).getGiven()) {
+                    ascii2 += n.getName().charAt(0);
+                }
+                return Integer.compare(ascii1, ascii2);
+            });
             List<rowCal> joined = relevantTables.get(0);
-
             for (int i = 1; i < relevantTables.size(); i++) {
-                joined = joinTwoTables(joined, relevantTables.get(i),true);
+                joined = joinTwoTables(joined, relevantTables.get(i));
             }
-
-            List<rowCal> eliminated = eliminate(joined, hiddenVar);
-
-            MinimizeTables.removeAll(relevantTables);
-
-            MinimizeTables.add(eliminated);
-
+            List<rowCal> eliminated =eliminate(joined, hiddenVar);
+            minimizeTables.removeAll(relevantTables);
+            minimizeTables.add(eliminated);
         }
-        if (MinimizeTables.isEmpty()) return "0.00000";
-
-        finalTable = MinimizeTables.get(0);
-        for (int i = 1; i < MinimizeTables.size(); i++) {
-            finalTable = joinTwoTables(finalTable, MinimizeTables.get(i),false);
+        if (minimizeTables.isEmpty()) {
+            return "0.00000,0,0";
         }
-
-
-
+        List<rowCal> finalTable = minimizeTables.get(0);
+        for (int i = 1; i < minimizeTables.size(); i++) {
+            finalTable = joinTwoTables(finalTable, minimizeTables.get(i));
+        }
         double sum = 0;
-        for (rowCal r : finalTable){
-            sum += r.prob;
-            addCount++;
+        boolean first = true;
+        for (rowCal r : finalTable) {
+            if (first) {
+                sum = r.prob;
+                first = false;
+            } else {
+                sum += r.prob;
+                addCount++;
+            }
         }
-        for (rowCal r : finalTable) r.prob /= sum;
+        for (rowCal r : finalTable) {
+            r.prob /= sum;
+        }
+        double answer = 0;
+        for (rowCal r : finalTable) {
+            int idx = -1;
+            for (int i = 0; i < r.getGiven().size(); i++) {
+                if (r.getGiven().get(i).getName().equals(queryVar)) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx != -1 &&r.getValues()[idx].equals(queryVal)) {
+                answer = r.getProb();
+                break;
+            }
+        }
 
-
-        System.out.println("Multiply operations: " + multCount);
-        System.out.println("Add operations: " + addCount);
-
-
-        return multCount+","+addCount+","+;
+        return String.format("%.5f,%d,%d", answer, addCount, multCount);
     }
+
+
+//    public static String solveQuery(String query) {
+//
+//        String queryPart = query.substring(query.indexOf("(") + 1, query.indexOf(")")); // Q=q|E1=e1
+//        String hiddenPart = query.contains(" ") ? query.substring(query.indexOf(" ") + 1) : ""; // H1-H2
+//
+//        String[] splitQuery = queryPart.split("\\|");
+//        String queryVar = splitQuery[0].split("=")[0];
+//        String queryVal = splitQuery[0].split("=")[1];
+//
+//        Map<String, String> evidence = new HashMap<>();
+//        if (splitQuery.length > 1) {
+//            String[] evs = splitQuery[1].split(",");
+//            for (int i=0;i<evs.length;i++){
+//                String[] pair = evs[i].split("=");
+//                evidence.put(pair[0].trim(), pair[1].trim());
+//
+//            }
+//
+//        }
+//
+//        String[] hiddenOrder = hiddenPart.isEmpty() ? new String[0] : hiddenPart.split("-");
+//
+//
+//        List<Node> releventNode = new ArrayList<>(allNodes.values());
+//        releventNode=getRelevantNodes(queryVar,evidence);
+//        releventNode=getActiveNodes(queryVar,evidence,releventNode);
+//
+//        for (int i=0;i< allNodes.size();i++) {
+//            allNodes.get(i);
+//        }
+//
+//
+//        List<List<rowCal>> allTablesOfReleventNodes=new ArrayList<>();
+//        for (Node node : releventNode) {
+//            allTablesOfReleventNodes.addAll(node.getTables());
+//        }
+//        List<rowCal> finalTable=new ArrayList<>();
+//        List<List<rowCal>> MinimizeTables = new ArrayList<>();
+//        for (List<rowCal> table: allTablesOfReleventNodes){
+//            List<rowCal> filteredTable = filterByEvidence(table, evidence);
+//            MinimizeTables.add(filteredTable);
+//        }
+//        List<List<rowCal>> hidenTables=new ArrayList<>();
+//        for (String hiddenVar : hiddenOrder) {
+//
+//            List<List<rowCal>> relevantTables =
+//                    getReleventTables(MinimizeTables, hiddenVar);
+//
+//            if (relevantTables.isEmpty()) {
+//                continue;
+//            }
+//
+//            List<rowCal> joined = relevantTables.get(0);
+//
+//            for (int i = 1; i < relevantTables.size(); i++) {
+//                joined = joinTwoTables(joined, relevantTables.get(i),true);
+//            }
+//
+//            List<rowCal> eliminated = eliminate(joined, hiddenVar);
+//
+//            MinimizeTables.removeAll(relevantTables);
+//
+//            MinimizeTables.add(eliminated);
+//
+//        }
+//        if (MinimizeTables.isEmpty()) return "0.00000";
+//
+//        finalTable = MinimizeTables.get(0);
+//        for (int i = 1; i < MinimizeTables.size(); i++) {
+//            finalTable = joinTwoTables(finalTable, MinimizeTables.get(i),false);
+//        }
+//
+//
+//
+//        double sum = 0;
+//        for (rowCal r : finalTable){
+//            sum += r.prob;
+//            addCount++;
+//        }
+//        for (rowCal r : finalTable) r.prob /= sum;
+//
+//
+//        System.out.println("Multiply operations: " + multCount);
+//        System.out.println("Add operations: " + addCount);
+//
+//
+//        return multCount+","+addCount+",";
+//    }
 
 
     public static List<List<rowCal>> getReleventTables(List<List<rowCal>> allTables,String hiddenName){
@@ -460,60 +616,114 @@ private static boolean isCompatible(rowCal r1, rowCal r2) {
     return true;
 }
     public static List<rowCal> eliminate(List<rowCal> table, String varName) {
-        if (table == null || table.isEmpty()) return table;
+
+        if (table == null || table.isEmpty()) {
+            return table;
+        }
 
         int indexToRemove = -1;
-        List<Node> Given = table.get(0).getGiven();
 
-        for (int i = 0; i < Given.size(); i++) {
-            if (Given.get(i).getName().equals(varName)) {
+        List<Node> oldGiven = table.get(0).getGiven();
+
+        for (int i = 0; i < oldGiven.size(); i++) {
+            if (oldGiven.get(i).getName().equals(varName)) {
                 indexToRemove = i;
+                break;
             }
         }
-
-        if (indexToRemove == -1) return table;
-
-            rowCal rc=table.get(0);
-            rc.getGiven().remove(indexToRemove);
-            int count=0;
-        for (int i=0;i<table.size();i++){
-            rc=table.get(i);
-            String[] arr=new String[rc.getValues().length-1];
-            for (int j=0;j<= arr.length;j++){
-                if (j==indexToRemove) continue;
-                else {
-                    arr[count]=rc.getValues()[j];
-                    count++;
-                }
-            }
-            table.get(i).setValues(arr);
-            count=0;
+        if (indexToRemove == -1) {
+            return table;
         }
-        table.size();
-        Map<String, Double> tempMap=new HashMap<>();
-        for (int i=0;i<table.size();i++){
-            rowCal r=table.get(i);
-            String key=String.join(" ", r.getValues());
-            if (tempMap.containsKey(key)){
-                double value=tempMap.get(key);
-                tempMap.put(key,value+table.get(i).getProb());
+
+        List<Node> newGiven = new ArrayList<>(oldGiven);
+
+        newGiven.remove(indexToRemove);
+
+        Map<String, Double> tempMap = new LinkedHashMap<>();
+
+        for (rowCal rc : table) {
+            String[] oldVals = rc.getValues();
+            String[] newVals =new String[oldVals.length - 1];
+            int k = 0;
+            for (int j = 0; j < oldVals.length; j++) {
+                if (j == indexToRemove) continue;
+                newVals[k++] = oldVals[j];
+            }
+            String key = String.join(" ", newVals);
+            if (tempMap.containsKey(key)) {
+                tempMap.put(key, tempMap.get(key) + rc.getProb());
                 addCount++;
-            }else {
-                tempMap.put(String.join(" ", r.getValues()),r.getProb());
+            } else {
+                tempMap.put(key, rc.getProb());
             }
-
         }
         List<rowCal> finalTable = new ArrayList<>();
         for (Map.Entry<String, Double> entry : tempMap.entrySet()) {
-            String[] values = entry.getKey().split(" ");
-            double prob = entry.getValue();
-
-            finalTable.add(new rowCal(values, prob, table.get(0).getGiven()));
+            String[] values;
+            if (entry.getKey().isEmpty()) {
+                values = new String[0];
+            } else {
+                values = entry.getKey().split(" ");
+            }
+            finalTable.add(new rowCal(values, entry.getValue(), new ArrayList<>(newGiven)));
         }
         return finalTable;
     }
+//    public static List<rowCal> eliminate(List<rowCal> table, String varName) {
+//        if (table == null || table.isEmpty()) return table;
+//
+//        int indexToRemove = -1;
+//        List<Node> Given = table.get(0).getGiven();
+//
+//        for (int i = 0; i < Given.size(); i++) {
+//            if (Given.get(i).getName().equals(varName)) {
+//                indexToRemove = i;
+//            }
+//        }
+//
+//        if (indexToRemove == -1) return table;
+//
+//            rowCal rc=table.get(0);
+//            rc.getGiven().remove(indexToRemove);
+//            int count=0;
+//        for (int i=0;i<table.size();i++){
+//            rc=table.get(i);
+//            String[] arr=new String[rc.getValues().length-1];
+//            for (int j=0;j<= arr.length;j++){
+//                if (j==indexToRemove) continue;
+//                else {
+//                    arr[count]=rc.getValues()[j];
+//                    count++;
+//                }
+//            }
+//            table.get(i).setValues(arr);
+//            count=0;
+//        }
+//        table.size();
+//        Map<String, Double> tempMap=new HashMap<>();
+//        for (int i=0;i<table.size();i++){
+//            rowCal r=table.get(i);
+//            String key=String.join(" ", r.getValues());
+//            if (tempMap.containsKey(key)){
+//                double value=tempMap.get(key);
+//                tempMap.put(key,value+table.get(i).getProb());
+//                addCount++;
+//            }else {
+//                tempMap.put(String.join(" ", r.getValues()),r.getProb());
+//            }
+//
+//        }
+//        List<rowCal> finalTable = new ArrayList<>();
+//        for (Map.Entry<String, Double> entry : tempMap.entrySet()) {
+//            String[] values = entry.getKey().split(" ");
+//            double prob = entry.getValue();
+//
+//            finalTable.add(new rowCal(values, prob, table.get(0).getGiven()));
+//        }
+//        return finalTable;
+//    }
 
-    public static List<rowCal> joinTwoTables(List<rowCal> table1, List<rowCal> table2,boolean b) {
+    public static List<rowCal> joinTwoTables(List<rowCal> table1, List<rowCal> table2) {
 
 
         List<rowCal> result = new ArrayList<>();
@@ -544,7 +754,7 @@ private static boolean isCompatible(rowCal r1, rowCal r2) {
                     }
 
                     result.add(new rowCal(newVals, r1.prob * r2.prob, newGiven));
-                    if (b)multCount++;
+                    multCount++;
                 }
             }
         }
