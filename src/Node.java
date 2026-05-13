@@ -12,6 +12,8 @@ public class Node {
         return tables;
     }
 
+
+
     public Node(String name) {
         nodeName=name;
     }
@@ -50,6 +52,9 @@ public class Node {
 
     public void addOutcome(String s) {
         outcome.add(s);
+    }
+    public void setOutcome(List<String> outcome){
+        this.outcome=outcome;
     }
     public String getOutcome(int i){
         return outcome.get(i);
