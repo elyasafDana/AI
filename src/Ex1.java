@@ -42,7 +42,7 @@ public class Ex1 {
                 } else if (line.startsWith("P(")) {
                     writeToFile(solveQuery(line));
                 } else {
-                    writeToFile(solveBayesBall(line) ? "yes" : "no");
+                    writeToFile(solveBayesBall(line) ? "no" : "yes");
                 }
             }
             scanner.close();
@@ -230,9 +230,37 @@ public class Ex1 {
             }
             xml.append("</VARIABLE>\n\n");
         }
+        List<Node> defs = new ArrayList<>(nodesMap.values());
+        //defs.reversed();
+//
+//        defs.sort((n1, n2) -> {
+//            if (n1.getParents().contains(n2)) return 1;
+//            if (n2.getParents().contains(n1)) return -1;
+//            return n1.getName().compareTo(n2.getName());
+//        });
+//        List<Node> defs = new ArrayList<>(nodesMap.values());
+//
+//        defs.sort(Comparator
+//                .comparingInt((Node n) -> n.getParents().size())
+//                .thenComparing(Node::getName));
+        Collections.reverse(defs);
 
-        for (Node node : nodesMap.values()) {
+        // 3. נמיין אלפביתית רק את המשתנים שלא היו להם ילדים ברשת המקורית
+        defs.sort((n1, n2) -> {
+            Node orig1 = allNodes.get(n1.getName());
+            Node orig2 = allNodes.get(n2.getName());
+
+            if (orig1 != null && orig2 != null && orig1.getChildren().isEmpty() && orig2.getChildren().isEmpty()) {
+                return n1.getName().compareTo(n2.getName());
+            }
+            return 0; // שומר על הסדר ההפוך לשאר המשתנים
+        });
+
+
+        for (Node node : defs) {
             xml.append("<DEFINITION>\n");
+//        for (Node node : nodesMap.values()) {
+//            xml.append("<DEFINITION>\n");
             xml.append("\t<FOR>").append(node.getName()).append("</FOR>\n");
 
             for (Node parent : node.getParents()) {
